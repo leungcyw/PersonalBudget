@@ -14,6 +14,9 @@ const RAW_DATASHEET_AMOUNT = 3;
 // Constants for stored data spreadsheet
 const DATASTORE_DATASHEET_NAME = 'Data';
 const DATASTORE_TEMP_CELL = 'B1';
+const DATASTORE_TEMP_RANGE = 'B1:B';
+const DATASTORE_TEMP_ROW = 1;
+const DATASTORE_TEMP_COL = 2;
 
 // Constants for dashboard spreadsheet
 const DASHBOARD_DATASHEET_NAME = 'Dashboard';
@@ -26,6 +29,17 @@ const DASHBOARD_MONTH_BALANCE_CELL = 'B7';
 const DASHBOARD_YEAR_BALANCE_CELL = 'B8';
 const DASHBOARD_TOTAL_BALANCE_CELL = 'B9';
 
+// Query and formatting constants
+const CURRENCY_FORMAT = "$#,##0.00";
+const POSITIVE_AMOUNT_COLOR = 'green';
+const NEGATIVE_AMOUNT_COLOR = 'red';
+const FORM_QUERY_TARGET = '\'Form Responses\'!A:D';
+const FORM_DATE_EXPENSE_SQL = 'select D where A >= date \'"&TEXT(TODAY(), "yyyy-mm-dd")&"\' and B != \'Income\'';
+const FORM_MONTH_EXPENSE_SQL = 'select D where MONTH(A) = MONTH(date \'"&TEXT(TODAY(), "yyyy-mm-dd")&"\') and YEAR(A) = YEAR(date \'"&TEXT(TODAY(), "yyyy-mm-dd")&"\') and B != \'Income\'';
+const FORM_YEAR_EXPENSE_SQL = 'select D where YEAR(A) = YEAR(date \'"&TEXT(TODAY(), "yyyy-mm-dd")&"\') and B != \'Income\'';
+const FORM_MONTH_INCOME_SQL = 'select D where MONTH(A) = MONTH(date \'"&TEXT(TODAY(), "yyyy-mm-dd")&"\') and YEAR(A) = YEAR(date \'"&TEXT(TODAY(), "yyyy-mm-dd")&"\') and B = \'Income\'';
+const FORM_YEAR_INCOME_SQL = 'select D where YEAR(A) = YEAR(date \'"&TEXT(TODAY(), "yyyy-mm-dd")&"\') and B = \'Income\'';
+
 
 /**
  * Displays data when the Google Sheets spreadsheet is opened
@@ -36,24 +50,24 @@ function onOpen(e) {
   var dashboard = spreadsheet.getSheetByName(DASHBOARD_DATASHEET_NAME);
   
   // Queries data from Google Form responses and sets the data
-  CURRENT_DATE_EXPENSES();
-  CURRENT_MONTH_EXPENSES();
-  CURRENT_YEAR_EXPENSES();
-  CURRENT_MONTH_INCOME();
-  CURRENT_YEAR_INCOME();
-  TOTAL_BALANCE();
-  
+  totalQuerySum(FORM_QUERY_TARGET, FORM_DATE_EXPENSE_SQL, DASHBOARD_DATASHEET_NAME, DASHBOARD_DATE_EXPENSE_CELL, CURRENCY_FORMAT);
+  totalQuerySum(FORM_QUERY_TARGET, FORM_MONTH_EXPENSE_SQL, DASHBOARD_DATASHEET_NAME, DASHBOARD_MONTH_EXPENSE_CELL, CURRENCY_FORMAT);
+  totalQuerySum(FORM_QUERY_TARGET, FORM_YEAR_EXPENSE_SQL, DASHBOARD_DATASHEET_NAME, DASHBOARD_YEAR_EXPENSE_CELL, CURRENCY_FORMAT);
+  totalQuerySum(FORM_QUERY_TARGET, FORM_MONTH_INCOME_SQL, DASHBOARD_DATASHEET_NAME, DASHBOARD_MONTH_INCOME_CELL, CURRENCY_FORMAT);
+  totalQuerySum(FORM_QUERY_TARGET, FORM_YEAR_INCOME_SQL, DASHBOARD_DATASHEET_NAME, DASHBOARD_YEAR_INCOME_CELL, CURRENCY_FORMAT);
+  totalBalance();
+
   // Computes and sets the total monthly balance
   var monthBalanceCell = dashboard.getRange(DASHBOARD_MONTH_BALANCE_CELL);
   var monthIncomeValue = dashboard.getRange(DASHBOARD_MONTH_INCOME_CELL).getValue();
   var monthExpenseValue = dashboard.getRange(DASHBOARD_MONTH_EXPENSE_CELL).getValue();
   var monthBalanceValue = monthIncomeValue - monthExpenseValue;
-  monthBalanceCell.setNumberFormat("$#,##0.00");
+  monthBalanceCell.setNumberFormat(CURRENCY_FORMAT);
   monthBalanceCell.setValue(monthBalanceValue);
   if (monthBalanceValue >= 0) {
-    monthBalanceCell.setFontColor('green');
+    monthBalanceCell.setFontColor(POSITIVE_AMOUNT_COLOR);
   } else {
-    monthBalanceCell.setFontColor('red');
+    monthBalanceCell.setFontColor(NEGATIVE_AMOUNT_COLOR);
   }
      
   // Computes and sets the total yearly balance
@@ -61,12 +75,12 @@ function onOpen(e) {
   var yearIncomeValue = dashboard.getRange(DASHBOARD_YEAR_INCOME_CELL).getValue();
   var yearExpenseValue = dashboard.getRange(DASHBOARD_YEAR_EXPENSE_CELL).getValue();
   var yearBalanceValue = yearIncomeValue - yearExpenseValue;
-  yearBalanceCell.setNumberFormat("$#,##0.00");
+  yearBalanceCell.setNumberFormat(CURRENCY_FORMAT);
   yearBalanceCell.setValue(yearBalanceValue);
   if (yearBalanceValue >= 0) {
-    yearBalanceCell.setFontColor('green');
+    yearBalanceCell.setFontColor(POSITIVE_AMOUNT_COLOR);
   } else {
-    yearBalanceCell.setFontColor('red');
+    yearBalanceCell.setFontColor(NEGATIVE_AMOUNT_COLOR);
   }
 }
 
@@ -74,7 +88,7 @@ function onOpen(e) {
 /**
  * Gets the total balance from all data from the Google Form spreadsheet
  */
-function TOTAL_BALANCE() {
+function totalBalance() {
   // Gets the raw data from the Google Form spreadsheet
   var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   var rawDatasheet = spreadsheet.getSheetByName(RAW_DATASHEET_NAME);
@@ -95,137 +109,42 @@ function TOTAL_BALANCE() {
   var totalBalance = totalIncome - totalExpenses;
   var dashboard = spreadsheet.getSheetByName(DASHBOARD_DATASHEET_NAME);
   var cell = dashboard.getRange(DASHBOARD_TOTAL_BALANCE_CELL);
-  cell.setNumberFormat("$#,##0.00");
+  cell.setNumberFormat(CURRENCY_FORMAT);
   cell.setValue(totalBalance);
   
   // Sets the color of the text
   if (totalBalance >= 0) {
-    cell.setFontColor('green');
+    cell.setFontColor(POSITIVE_AMOUNT_COLOR);
   } else {
-    cell.setFontColor('red');
+    cell.setFontColor(NEGATIVE_AMOUNT_COLOR);
   }
 }
-
 
 /**
- * Gets the total expenses of the current date and displays it on the dashboard
+ * Sets the sum of a query sum to the specified sheet and cell
+ * @param {String} target The target of the query
+ * @param {String} sql The query parameters to search for
+ * @param {String} resultSheet The sheet to display the result in
+ * @param {String} resultCell The cell on the sheet to display the result in
+ * @param {String} resultFormat The format to display the result
  */
-function CURRENT_DATE_EXPENSES() {
-  // Gets the results of the query of all expenses from the current date
-  const QUERY_TARGET = '\'Form Responses\'!A:D';
-  const QUERY_SQL = 'select D where A >= date \'"&TEXT(TODAY(), "yyyy-mm-dd")&"\' and B != \'Income\'';
+function totalQuerySum(target, sql, resultSheet, resultCell, resultFormat) {
+  // Gets the sheet to display the result
   var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  var dashboard = spreadsheet.getSheetByName(DASHBOARD_DATASHEET_NAME);
-  var queryData = QUERY_DATA(QUERY_TARGET, QUERY_SQL);
- 
-  // Computes the total expenses of the current date
-  var currentDateExpenses = 0;
+  var sheet = spreadsheet.getSheetByName(resultSheet);
+  
+  // Queries the data and sums the query output
+  var queryData = query(target, sql);
+  var sum = 0;
   for (var i = 1; i < queryData.length; i++) {
-    currentDateExpenses += queryData[i];
+    sum += queryData[i];
   }
   
-  // Sets the result on the dashboard
-  var cell = dashboard.getRange(DASHBOARD_DATE_EXPENSE_CELL);
-  cell.setNumberFormat("$#,##0.00;$(#,##0.00)");
-  cell.setValue(currentDateExpenses);
+  // Sets the query sum to resultCell using resultFormat
+  var cell = sheet.getRange(resultCell);
+  cell.setNumberFormat(resultFormat);
+  cell.setValue(sum);
 }
-
-
-/**
- * Gets the total expenses of the current month and displays it on the dashboard
- */
-function CURRENT_MONTH_EXPENSES() {
-  // Gets the results of the query of all expenses from the current month
-  const QUERY_TARGET = '\'Form Responses\'!A:D';
-  const QUERY_SQL = 'select D where MONTH(A) = MONTH(date \'"&TEXT(TODAY(), "yyyy-mm-dd")&"\') and YEAR(A) = YEAR(date \'"&TEXT(TODAY(), "yyyy-mm-dd")&"\') and B != \'Income\'';
-  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  var dashboard = spreadsheet.getSheetByName(DASHBOARD_DATASHEET_NAME);
-  var queryData = QUERY_DATA(QUERY_TARGET, QUERY_SQL);
-  
-  // Computes the total expenses of the current month
-  var currentMonthExpenses = 0;
-  for (var i = 1; i < queryData.length; i++) {
-    currentMonthExpenses += queryData[i];
-  }
-  
-  // Sets the result on the dashboard
-  var cell = dashboard.getRange(DASHBOARD_MONTH_EXPENSE_CELL);
-  cell.setNumberFormat("$#,##0.00;$(#,##0.00)");
-  cell.setValue(currentMonthExpenses);
-}
-
-
-/**
- * Gets the total expenses of the current year and displays it on the dashboard
- */
-function CURRENT_YEAR_EXPENSES() {
-  // Gets the results of the query of all expenses from the current year
-  const QUERY_TARGET = '\'Form Responses\'!A:D';
-  const QUERY_SQL = 'select D where YEAR(A) = YEAR(date \'"&TEXT(TODAY(), "yyyy-mm-dd")&"\') and B != \'Income\'';
-  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  var dashboard = spreadsheet.getSheetByName(DASHBOARD_DATASHEET_NAME);
-  var queryData = QUERY_DATA(QUERY_TARGET, QUERY_SQL);
-  
-  // Computes the total expenses of the current year
-  var currentYearExpenses = 0;
-  for (var i = 1; i < queryData.length; i++) {
-    currentYearExpenses += queryData[i];
-  }
-  
-  // Sets the result on the dashboard
-  var cell = dashboard.getRange(DASHBOARD_YEAR_EXPENSE_CELL);
-  cell.setNumberFormat("$#,##0.00;$(#,##0.00)");
-  cell.setValue(currentYearExpenses);
-}
-
-
-/**
- * Gets the total income of the current month and displays it on the dashboard
- */
-function CURRENT_MONTH_INCOME() {
-  // Gets the results of the query of all income from the current month
-  const QUERY_TARGET = '\'Form Responses\'!A:D';
-  const QUERY_SQL = 'select D where MONTH(A) = MONTH(date \'"&TEXT(TODAY(), "yyyy-mm-dd")&"\') and YEAR(A) = YEAR(date \'"&TEXT(TODAY(), "yyyy-mm-dd")&"\') and B = \'Income\'';
-  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  var dashboard = spreadsheet.getSheetByName(DASHBOARD_DATASHEET_NAME);
-  var queryData = QUERY_DATA(QUERY_TARGET, QUERY_SQL);
-  
-  // Computes the total income of the current month
-  var currentMonthIncome = 0;
-  for (var i = 1; i < queryData.length; i++) {
-    currentMonthIncome += queryData[i];
-  }
-  
-  // Sets the result on the dashboard
-  var cell = dashboard.getRange(DASHBOARD_MONTH_INCOME_CELL);
-  cell.setNumberFormat("$#,##0.00;$(#,##0.00)");
-  cell.setValue(currentMonthIncome);
-}
-
-
-/**
- * Gets the total income of the current year and displays it on the dashboard
- */
-function CURRENT_YEAR_INCOME() {
-  // Gets the results of the query of all income from the current year
-  const QUERY_TARGET = '\'Form Responses\'!A:D';
-  const QUERY_SQL = 'select D where YEAR(A) = YEAR(date \'"&TEXT(TODAY(), "yyyy-mm-dd")&"\') and B = \'Income\'';
-  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  var dashboard = spreadsheet.getSheetByName(DASHBOARD_DATASHEET_NAME);
-  var queryData = QUERY_DATA(QUERY_TARGET, QUERY_SQL);
-  
-  // Computes the total income of the current year
-  var currentYearIncome = 0;
-  for (var i = 1; i < queryData.length; i++) {
-    currentYearIncome += queryData[i];
-  }
-  
-  // Sets the result on the dashboard
-  var cell = dashboard.getRange(DASHBOARD_YEAR_INCOME_CELL);
-  cell.setNumberFormat("$#,##0.00;$(#,##0.00)");
-  cell.setValue(currentYearIncome);
-}
-
 
 /**
  * Queries data from the spreadsheet with given parameters
@@ -233,19 +152,23 @@ function CURRENT_YEAR_INCOME() {
  * @param {String} sql The query parameters to search for
  * @return {Array} the result
  */
-function QUERY_DATA(target, sql) { 
-  // Creates a temp sheet for query process
+function query(target, sql) { 
+  // Uses the data sheet for query process
   var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  var tempSheet = spreadsheet.insertSheet();
+  var dataSheet = spreadsheet.getSheetByName(DATASTORE_DATASHEET_NAME);
   
   // Creates the query string
   var query = '=QUERY(' + target + ', \"' + sql + '\")';
   
-  // Sets query results in the temp sheet for temporary storage and gets the values as an array
-  var pushQuery = tempSheet.getRange(1, 1).setFormula(query);
-  var pullResult = tempSheet.getDataRange().getValues();
+  // Sets query results in the data sheet for temporary storage
+  var pushQuery = dataSheet.getRange(DATASTORE_TEMP_CELL).setFormula(query);
   
-  // Deletes the temp sheet and returns the queried data
-  spreadsheet.deleteSheet(tempSheet);
+  // Finds the number of rows in the data sheet for the temp column and gets the results
+  var range = dataSheet.getRange(DATASTORE_TEMP_RANGE).getValues();
+  var numRows = range.filter(String).length;
+  var pullResult = dataSheet.getRange(DATASTORE_TEMP_ROW, DATASTORE_TEMP_COL, numRows).getValues();
+  
+  // Deletes the column returns the queried data
+  dataSheet.deleteColumn(DATASTORE_TEMP_COL);
   return pullResult;
 }
