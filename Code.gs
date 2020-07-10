@@ -13,10 +13,17 @@ const RAW_DATASHEET_AMOUNT = 3;
 
 // Constants for stored data spreadsheet
 const DATASTORE_DATASHEET_NAME = 'Data';
-const DATASTORE_TEMP_CELL = 'B1';
-const DATASTORE_TEMP_RANGE = 'B1:B';
+const DATASTORE_DEFAULT_MEASUREMENTS_CELL = 'A1';
+const DATASTORE_TEMP_CELL = 'D1';
+const DATASTORE_TEMP_RANGE = 'D1:D';
 const DATASTORE_TEMP_ROW = 1;
-const DATASTORE_TEMP_COL = 2;
+const DATASTORE_TEMP_COL1 = 4;
+const DATASTORE_TEMP_COL2 = 5;
+const DATASTORE_TEMP_TWO_COLS = 2;
+const DATASTORE_MONTH_KEY_RANGE = 'B1:B';
+const DATASTORE_MONTH_VAL_RANGE = 'C1:C';
+const DATASTORE_MONTH_KEY_COL = 2;
+const DATASTORE_MONTH_VAL_COL = 3;
 
 // Constants for dashboard spreadsheet
 const DASHBOARD_DATASHEET_NAME = 'Dashboard';
@@ -39,7 +46,16 @@ const FORM_MONTH_EXPENSE_SQL = 'select D where MONTH(A) = MONTH(date \'"&TEXT(TO
 const FORM_YEAR_EXPENSE_SQL = 'select D where YEAR(A) = YEAR(date \'"&TEXT(TODAY(), "yyyy-mm-dd")&"\') and B != \'Income\'';
 const FORM_MONTH_INCOME_SQL = 'select D where MONTH(A) = MONTH(date \'"&TEXT(TODAY(), "yyyy-mm-dd")&"\') and YEAR(A) = YEAR(date \'"&TEXT(TODAY(), "yyyy-mm-dd")&"\') and B = \'Income\'';
 const FORM_YEAR_INCOME_SQL = 'select D where YEAR(A) = YEAR(date \'"&TEXT(TODAY(), "yyyy-mm-dd")&"\') and B = \'Income\'';
+const FORM_MONTH_CATEGORY_EXPENSE_SQL = 'select B,D where MONTH(A) = MONTH(date \'"&TEXT(TODAY(), "yyyy-mm-dd")&"\') and YEAR(A) = YEAR(date \'"&TEXT(TODAY(), "yyyy-mm-dd")&"\') and B != \'Income\'';
 
+// Budget Overview table constants
+const TALBE_NUM_ROWS = 9;
+
+// Graph constants
+const DATASTORE_MONTH_GRAPH_ROW_POS = 1;
+const DATASTORE_MONTH_GRAPH_COL_POS = 4;
+const MONTH_GRAPH_TITLE = 'Current Month Expenses';
+const MONTH_GRAPH_COL_RANGE = [4, 8];
 
 /**
  * Displays data when the Google Sheets spreadsheet is opened
@@ -48,6 +64,9 @@ const FORM_YEAR_INCOME_SQL = 'select D where YEAR(A) = YEAR(date \'"&TEXT(TODAY(
 function onOpen(e) {
   var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   var dashboard = spreadsheet.getSheetByName(DASHBOARD_DATASHEET_NAME);
+  
+  // Clears current figures to generate figures that reflect potential updates
+  clearFigures(DASHBOARD_DATASHEET_NAME);
   
   // Queries data from Google Form responses and sets the data
   totalQuerySum(FORM_QUERY_TARGET, FORM_DATE_EXPENSE_SQL, DASHBOARD_DATASHEET_NAME, DASHBOARD_DATE_EXPENSE_CELL, CURRENCY_FORMAT);
@@ -82,6 +101,10 @@ function onOpen(e) {
   } else {
     yearBalanceCell.setFontColor(NEGATIVE_AMOUNT_COLOR);
   }
+  
+  // Plots the monthly expenses as a pie chart
+  setPieChartData(FORM_QUERY_TARGET, FORM_MONTH_CATEGORY_EXPENSE_SQL, DATASTORE_MONTH_KEY_COL, DATASTORE_MONTH_VAL_COL);
+  displayPieChart(DATASTORE_MONTH_KEY_RANGE, DATASTORE_MONTH_VAL_RANGE, DATASTORE_MONTH_GRAPH_ROW_POS, DATASTORE_MONTH_GRAPH_COL_POS, MONTH_GRAPH_TITLE);
 }
 
 
@@ -147,6 +170,98 @@ function totalQuerySum(target, sql, resultSheet, resultCell, resultFormat) {
 }
 
 /**
+ * Displays pie chart with data from datasheet with given key and value ranges
+ * @param {String} keyRange The range of the keys
+ * @param {String} valRange The range of the values
+ * @param {Integer} rowPos The row of the top-left corner of the chart (Google Sheets uses 1-based indexing)
+ * @param {Integer} colPos The column of the top-left corner of the chart (Google Sheets uses 1-based indexing)
+ * @param {String} title The title of the plot
+ */
+function displayPieChart(keyRange, valRange, rowPos, colPos, title) {
+  // Gets the necessary sheets
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var dataSheet = spreadsheet.getSheetByName(DATASTORE_DATASHEET_NAME); 
+  var dashboard = spreadsheet.getSheetByName(DASHBOARD_DATASHEET_NAME);
+  
+  // Sets default column widths
+  setDefaultWidths(DASHBOARD_DATASHEET_NAME, MONTH_GRAPH_COL_RANGE);
+
+  // Gets the ranges for the labels and data values
+  var totalChartLabels = dataSheet.getRange(keyRange);
+  var totalChartValues = dataSheet.getRange(valRange);
+  
+  // Gets width and height of chart based on the Budget Overview table
+  var width = dashboard.getColumnWidth(MONTH_GRAPH_COL_RANGE[0]) * (MONTH_GRAPH_COL_RANGE[1] - MONTH_GRAPH_COL_RANGE[0] + 1);
+  var height = dashboard.getRowHeight(1) * TALBE_NUM_ROWS;
+
+  // Sets parameters for the pie chart
+  var totalsChart = dataSheet.newChart()
+  .setChartType(Charts.ChartType.PIE)
+  .addRange(totalChartLabels)
+  .addRange(totalChartValues)
+  .setPosition(rowPos, colPos, 0, 0)
+  .setOption('legend.position', 'right')
+  .setOption('pieSliceText', 'value-and-percentage')
+  .setOption('title', title)
+  .setOption('width', width)
+  .setOption('height', height)
+  .setNumHeaders(1)
+  .build();
+
+  // Inserts the chart into the dashboard
+  dashboard.insertChart(totalsChart);
+}
+
+/**
+ * Sets the pie chart data of aggregates of each expense type to the data sheet
+ * @param {String} target The target of the query
+ * @param {String} sql The query parameters to search for
+ * @param {Integer} keyCol The column to store keys (Google Sheets uses 1-based indexing)
+ * @param {Integer} valCol The column to store values (Google Sheets used 1-based indexing)
+ */
+function setPieChartData(target, sql, keyCol, valCol) {
+  // Uses the data sheet for query process and data storage
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var dataSheet = spreadsheet.getSheetByName(DATASTORE_DATASHEET_NAME);
+  
+  // Deletes currently stored data
+  dataSheet.deleteColumn(valCol);
+  dataSheet.deleteColumn(keyCol);
+
+  
+  // Queries data and stores in it in columns dedicated to temporary storage
+  var query = '=QUERY(' + target + ', \"' + sql + '\")';
+  var pushQuery = dataSheet.getRange(DATASTORE_TEMP_CELL).setFormula(query);
+  var range = dataSheet.getRange(DATASTORE_TEMP_RANGE).getValues();
+  var numRows = range.filter(String).length;
+  var pullResult = dataSheet.getRange(DATASTORE_TEMP_ROW, DATASTORE_TEMP_COL1, numRows, DATASTORE_TEMP_TWO_COLS).getValues();
+
+  // Adds queried data to a map to aggregate data of each category
+  var expenses = new Map();
+  for (var i = 1; i < pullResult.length; i++) {
+    var key = pullResult[i][0];
+    var val = pullResult[i][1];
+    if (expenses.has(key)) {
+      expenses.set(key, expenses.get(key) + val);
+    } else {
+      expenses.set(key, val);
+    }
+  }
+  
+  // Sets aggregate data to the the specified keyCol and valCol, starting on the second row
+  var row = 2;
+  expenses.forEach((val, key, map) => {
+    dataSheet.getRange(row, keyCol).setValue(key);
+    dataSheet.getRange(row, valCol).setValue(val);
+    row += 1;
+  });
+  
+  // Deletes temporary data 
+  dataSheet.deleteColumn(DATASTORE_TEMP_COL1);
+  dataSheet.deleteColumn(DATASTORE_TEMP_COL2);
+}
+
+/**
  * Queries data from the spreadsheet with given parameters
  * @param {String} target The target of the query
  * @param {String} sql The query parameters to search for
@@ -166,9 +281,40 @@ function query(target, sql) {
   // Finds the number of rows in the data sheet for the temp column and gets the results
   var range = dataSheet.getRange(DATASTORE_TEMP_RANGE).getValues();
   var numRows = range.filter(String).length;
-  var pullResult = dataSheet.getRange(DATASTORE_TEMP_ROW, DATASTORE_TEMP_COL, numRows).getValues();
+  var pullResult = dataSheet.getRange(DATASTORE_TEMP_ROW, DATASTORE_TEMP_COL1, numRows).getValues();
   
   // Deletes the column returns the queried data
-  dataSheet.deleteColumn(DATASTORE_TEMP_COL);
+  dataSheet.deleteColumn(DATASTORE_TEMP_COL1);
   return pullResult;
+}
+
+/**
+ * Clears all figures from a sheet
+ * @param {String} sheetName The name of the sheet to clear figures of
+ */
+function clearFigures(sheetName) {
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = spreadsheet.getSheetByName(sheetName);
+  var charts = sheet.getCharts();
+  for (var i = 0; i < charts.length; i++) {
+    sheet.removeChart(charts[i]);
+  }
+}
+
+/**
+ * Sets a range of columns to default widths, determined by column 1 of the Data sheet
+ * @param {String} sheetName The name of the sheet to set columns to default width
+ * @param {Array} cols The array storing the start and end columns to set the widths, inclusive
+ */
+function setDefaultWidths(sheetName, cols) {
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var dataSheet = spreadsheet.getSheetByName(DATASTORE_DATASHEET_NAME);
+  var sheet = spreadsheet.getSheetByName(sheetName);
+  var width = dataSheet.getColumnWidth(1);
+  
+  var col = cols[0];
+  while (col <= cols[1]) {
+    sheet.setColumnWidth(col, width);
+    col += 1;
+  }
 }
