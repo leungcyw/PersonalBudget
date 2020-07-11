@@ -57,56 +57,29 @@ const DATASTORE_MONTH_GRAPH_COL_POS = 4;
 const MONTH_GRAPH_TITLE = 'Current Month Expenses';
 const MONTH_GRAPH_COL_RANGE = [4, 8];
 
-/**
- * Displays data when the Google Sheets spreadsheet is opened
- * @param {Event} e The onOpen event
- */
-function onOpen(e) {
-  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  var dashboard = spreadsheet.getSheetByName(DASHBOARD_DATASHEET_NAME);
-  
-  // Clears current figures to generate figures that reflect potential updates
-  clearFigures(DASHBOARD_DATASHEET_NAME);
-  
-  // Queries data from Google Form responses and sets the data
-  totalQuerySum(FORM_QUERY_TARGET, FORM_DATE_EXPENSE_SQL, DASHBOARD_DATASHEET_NAME, DASHBOARD_DATE_EXPENSE_CELL, CURRENCY_FORMAT);
-  totalQuerySum(FORM_QUERY_TARGET, FORM_MONTH_EXPENSE_SQL, DASHBOARD_DATASHEET_NAME, DASHBOARD_MONTH_EXPENSE_CELL, CURRENCY_FORMAT);
-  totalQuerySum(FORM_QUERY_TARGET, FORM_YEAR_EXPENSE_SQL, DASHBOARD_DATASHEET_NAME, DASHBOARD_YEAR_EXPENSE_CELL, CURRENCY_FORMAT);
-  totalQuerySum(FORM_QUERY_TARGET, FORM_MONTH_INCOME_SQL, DASHBOARD_DATASHEET_NAME, DASHBOARD_MONTH_INCOME_CELL, CURRENCY_FORMAT);
-  totalQuerySum(FORM_QUERY_TARGET, FORM_YEAR_INCOME_SQL, DASHBOARD_DATASHEET_NAME, DASHBOARD_YEAR_INCOME_CELL, CURRENCY_FORMAT);
-  totalBalance();
 
-  // Computes and sets the total monthly balance
-  var monthBalanceCell = dashboard.getRange(DASHBOARD_MONTH_BALANCE_CELL);
-  var monthIncomeValue = dashboard.getRange(DASHBOARD_MONTH_INCOME_CELL).getValue();
-  var monthExpenseValue = dashboard.getRange(DASHBOARD_MONTH_EXPENSE_CELL).getValue();
-  var monthBalanceValue = monthIncomeValue - monthExpenseValue;
-  monthBalanceCell.setNumberFormat(CURRENCY_FORMAT);
-  monthBalanceCell.setValue(monthBalanceValue);
-  if (monthBalanceValue >= 0) {
-    monthBalanceCell.setFontColor(POSITIVE_AMOUNT_COLOR);
-  } else {
-    monthBalanceCell.setFontColor(NEGATIVE_AMOUNT_COLOR);
-  }
-     
-  // Computes and sets the total yearly balance
-  var yearBalanceCell = dashboard.getRange(DASHBOARD_YEAR_BALANCE_CELL);
-  var yearIncomeValue = dashboard.getRange(DASHBOARD_YEAR_INCOME_CELL).getValue();
-  var yearExpenseValue = dashboard.getRange(DASHBOARD_YEAR_EXPENSE_CELL).getValue();
-  var yearBalanceValue = yearIncomeValue - yearExpenseValue;
-  yearBalanceCell.setNumberFormat(CURRENCY_FORMAT);
-  yearBalanceCell.setValue(yearBalanceValue);
-  if (yearBalanceValue >= 0) {
-    yearBalanceCell.setFontColor(POSITIVE_AMOUNT_COLOR);
-  } else {
-    yearBalanceCell.setFontColor(NEGATIVE_AMOUNT_COLOR);
-  }
-  
-  // Plots the monthly expenses as a pie chart
-  setPieChartData(FORM_QUERY_TARGET, FORM_MONTH_CATEGORY_EXPENSE_SQL, DATASTORE_MONTH_KEY_COL, DATASTORE_MONTH_VAL_COL);
-  displayPieChart(DATASTORE_MONTH_KEY_RANGE, DATASTORE_MONTH_VAL_RANGE, DATASTORE_MONTH_GRAPH_ROW_POS, DATASTORE_MONTH_GRAPH_COL_POS, MONTH_GRAPH_TITLE);
+/**
+ * Creates a Trigger to update the dashboard whenever the Google Form is submitted
+ * NOTE: MUST BE MANUALLY CALLED TO CREATE THE TRIGGER 
+ */
+function createUpdateTrigger() {
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  ScriptApp.newTrigger('updateDashboard')
+  .forSpreadsheet(spreadsheet)
+  .onFormSubmit()
+  .create();
 }
 
+/**
+ * Deletes all currently active Triggers
+ * NOTE: MUST BE MANUALLY CALLED TO DELE
+ */
+function deleteTriggers() {
+  var triggers = ScriptApp.getProjectTriggers();
+  for(var i = 0; i < triggers.length; i++){
+      ScriptApp.deleteTrigger(triggers[i]);
+  }
+}
 
 /**
  * Gets the total balance from all data from the Google Form spreadsheet
@@ -160,7 +133,7 @@ function totalQuerySum(target, sql, resultSheet, resultCell, resultFormat) {
   var queryData = query(target, sql);
   var sum = 0;
   for (var i = 1; i < queryData.length; i++) {
-    sum += queryData[i];
+    sum += queryData[i][0];
   }
   
   // Sets the query sum to resultCell using resultFormat
@@ -317,4 +290,53 @@ function setDefaultWidths(sheetName, cols) {
     sheet.setColumnWidth(col, width);
     col += 1;
   }
+}
+
+/**
+ * Main function to update the dashboard
+ */
+function updateDashboard() {
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var dashboard = spreadsheet.getSheetByName(DASHBOARD_DATASHEET_NAME);
+  
+  // Clears current figures to generate figures that reflect potential updates
+  clearFigures(DASHBOARD_DATASHEET_NAME);
+  
+  // Queries data from Google Form responses and sets the data
+  totalQuerySum(FORM_QUERY_TARGET, FORM_DATE_EXPENSE_SQL, DASHBOARD_DATASHEET_NAME, DASHBOARD_DATE_EXPENSE_CELL, CURRENCY_FORMAT);
+  totalQuerySum(FORM_QUERY_TARGET, FORM_MONTH_EXPENSE_SQL, DASHBOARD_DATASHEET_NAME, DASHBOARD_MONTH_EXPENSE_CELL, CURRENCY_FORMAT);
+  totalQuerySum(FORM_QUERY_TARGET, FORM_YEAR_EXPENSE_SQL, DASHBOARD_DATASHEET_NAME, DASHBOARD_YEAR_EXPENSE_CELL, CURRENCY_FORMAT);
+  totalQuerySum(FORM_QUERY_TARGET, FORM_MONTH_INCOME_SQL, DASHBOARD_DATASHEET_NAME, DASHBOARD_MONTH_INCOME_CELL, CURRENCY_FORMAT);
+  totalQuerySum(FORM_QUERY_TARGET, FORM_YEAR_INCOME_SQL, DASHBOARD_DATASHEET_NAME, DASHBOARD_YEAR_INCOME_CELL, CURRENCY_FORMAT);
+  totalBalance();
+
+  // Computes and sets the total monthly balance
+  var monthBalanceCell = dashboard.getRange(DASHBOARD_MONTH_BALANCE_CELL);
+  var monthIncomeValue = dashboard.getRange(DASHBOARD_MONTH_INCOME_CELL).getValue();
+  var monthExpenseValue = dashboard.getRange(DASHBOARD_MONTH_EXPENSE_CELL).getValue();
+  var monthBalanceValue = monthIncomeValue - monthExpenseValue;
+  monthBalanceCell.setNumberFormat(CURRENCY_FORMAT);
+  monthBalanceCell.setValue(monthBalanceValue);
+  if (monthBalanceValue >= 0) {
+    monthBalanceCell.setFontColor(POSITIVE_AMOUNT_COLOR);
+  } else {
+    monthBalanceCell.setFontColor(NEGATIVE_AMOUNT_COLOR);
+  }
+     
+  // Computes and sets the total yearly balance
+  var yearBalanceCell = dashboard.getRange(DASHBOARD_YEAR_BALANCE_CELL);
+  var yearIncomeValue = dashboard.getRange(DASHBOARD_YEAR_INCOME_CELL).getValue();
+  var yearExpenseValue = dashboard.getRange(DASHBOARD_YEAR_EXPENSE_CELL).getValue();
+  var yearBalanceValue = yearIncomeValue - yearExpenseValue;
+  yearBalanceCell.setNumberFormat(CURRENCY_FORMAT);
+  yearBalanceCell.setValue(yearBalanceValue);
+  if (yearBalanceValue >= 0) {
+    yearBalanceCell.setFontColor(POSITIVE_AMOUNT_COLOR);
+  } else {
+    yearBalanceCell.setFontColor(NEGATIVE_AMOUNT_COLOR);
+  }
+  
+  // Plots the monthly expenses as a pie chart
+  setPieChartData(FORM_QUERY_TARGET, FORM_MONTH_CATEGORY_EXPENSE_SQL, DATASTORE_MONTH_KEY_COL, DATASTORE_MONTH_VAL_COL);
+  displayPieChart(DATASTORE_MONTH_KEY_RANGE, DATASTORE_MONTH_VAL_RANGE, DATASTORE_MONTH_GRAPH_ROW_POS, DATASTORE_MONTH_GRAPH_COL_POS, MONTH_GRAPH_TITLE);
 }
