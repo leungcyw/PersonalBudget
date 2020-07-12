@@ -50,6 +50,33 @@ const FORM_MONTH_CATEGORY_EXPENSE_SQL = 'select B,D where MONTH(A) = MONTH(date 
 
 // Budget Overview table constants
 const TALBE_NUM_ROWS = 9;
+const TABLE_ROWS = [1, 9];
+const TABLE_COLS = [1, 2];
+const TABLE_CELL_HEIGHT = 45;
+const TABLE_CELL_KEY_WIDTH = 250;
+const TABLE_CELL_VAL_WIDTH = 180;
+const TABLE_STRINGS = new Map([
+  ['A1', 'Budget Overview'],
+  ['B1', ''],
+  ['A2', 'Current Date Expenses:'],
+  ['A3', 'Current Month Expenses:'],
+  ['A4', 'Current Year Expenses:'],
+  ['A5', 'Current Month Income:'],
+  ['A6', 'Current Year Income:'],
+  ['A7', 'Current Month Balance:'],
+  ['A8', 'Current Year Balance:'],
+  ['A9', 'Total Balance:']
+]);
+const TABLE_TITLE_RANGE = 'A1:B1';
+const TABLE_TITLE_FONT_SIZE = 24;
+const TABLE_TITLE_COLOR = '#a4c2f4';
+const TABLE_KEY_VAL_RANGE = 'A2:B9';
+const TABLE_BODY_FONT_SIZE = 14;
+const TABLE_BODY_ALTER_COLOR_RANGES = ['A2:B4', 'A7:B8'];
+const TABLE_BODY_ALTER_COLOR = '#d9d9d9';
+const TABLE_BODY_WHITE_COLOR_RANGES = ['A5:B6', 'A9:B9'];
+const TABLE_BODY_WHITE_COLOR = '#ffffff';
+const TABLE_RANGE = 'A1:B9';
 
 // Graph constants
 const DATASTORE_MONTH_GRAPH_ROW_POS = 1;
@@ -57,17 +84,88 @@ const DATASTORE_MONTH_GRAPH_COL_POS = 4;
 const MONTH_GRAPH_TITLE = 'Current Month Expenses';
 const MONTH_GRAPH_COL_RANGE = [4, 8];
 
+/**
+ * Creates the 'Budget Overview' table on the Dashboard 
+ */
+function formatOverviewTable() {
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var dashboard = spreadsheet.getSheetByName("Dashboard");
+  
+  //Sets the dimensions of the Budget Overview table
+  dashboard.setRowHeights(TABLE_ROWS[0], TABLE_ROWS[1] - TABLE_ROWS[0] + 1, TABLE_CELL_HEIGHT);
+  dashboard.setColumnWidth(TABLE_COLS[0], TABLE_CELL_KEY_WIDTH);
+  dashboard.setColumnWidth(TABLE_COLS[1], TABLE_CELL_VAL_WIDTH);
+  
+  // Sets table text
+  for (const [k, v] of TABLE_STRINGS) {
+    var cell = dashboard.getRange(k);
+    cell.setValue(v);
+  }
+  
+  // Merges cells of table heading
+  dashboard.getRange(TABLE_TITLE_RANGE).mergeAcross();
+  
+  // Formats cells for table heading
+  var titleRange = dashboard.getRange(TABLE_TITLE_RANGE);
+  titleRange.setHorizontalAlignment('center')
+  titleRange.setVerticalAlignment('middle');
+  titleRange.setFontWeight('bold');
+  titleRange.setFontSize(TABLE_TITLE_FONT_SIZE);
+  titleRange.setBackground(TABLE_TITLE_COLOR);
+  
+  // Formats cells for table body
+  var bodyRange = dashboard.getRange(TABLE_KEY_VAL_RANGE);
+  bodyRange.setHorizontalAlignment('right');
+  bodyRange.setVerticalAlignment('middle');
+  bodyRange.setFontSize(TABLE_BODY_FONT_SIZE);
+  
+  // Formats alternating colors for table body
+  var alterColorRanges = dashboard.getRangeList(TABLE_BODY_ALTER_COLOR_RANGES);
+  alterColorRanges.setBackground(TABLE_BODY_ALTER_COLOR);
+  var whiteColorRanges = dashboard.getRangeList(TABLE_BODY_WHITE_COLOR_RANGES);
+  whiteColorRanges.setBackground(TABLE_BODY_WHITE_COLOR);
+  
+  // Sets the table border
+  var tableRange = dashboard.getRange(TABLE_RANGE);
+  tableRange.setBorder(true, true, true, true, true, true);
+}
 
 /**
- * Creates a Trigger to update the dashboard whenever the Google Form is submitted
+ * Creates Triggers to update the dashboard whenever the Google Form is submitted and each new day
  * NOTE: MUST BE MANUALLY CALLED TO CREATE THE TRIGGER 
  */
-function createUpdateTrigger() {
+function createUpdateTriggers() {
   var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  ScriptApp.newTrigger('updateDashboard')
-  .forSpreadsheet(spreadsheet)
-  .onFormSubmit()
-  .create();
+  
+  // Checks if the Triggers currently exist
+  var createFormTrigger = true;
+  var createTimeTrigger = true;
+  var triggers = ScriptApp.getProjectTriggers();
+  triggers.forEach((trigger) => {
+    if (trigger.getEventType() === ScriptApp.EventType.ON_FORM_SUBMIT && trigger.getHandlerFunction() === 'updateDashboard') {
+      createFormTrigger = false;
+    } else if (trigger.getEventType() === ScriptApp.EventType.CLOCK && trigger.getHandlerFunction() === 'updateDashboard') {
+      createTimeTrigger = false;
+    }
+  });
+
+  // Creates a Trigger for Form submits
+  if (createFormTrigger) {
+    ScriptApp.newTrigger('updateDashboard')
+    .forSpreadsheet(spreadsheet)
+    .onFormSubmit()
+    .create();
+  }
+
+  // Creates a Trigger for time
+  if (createTimeTrigger) {
+    ScriptApp.newTrigger('updateDashboard')
+    .timeBased()
+    .atHour(0)
+    .nearMinute(30)
+    .everyDays(1)
+    .create();
+  }
 }
 
 /**
