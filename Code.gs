@@ -14,16 +14,22 @@ const RAW_DATASHEET_AMOUNT = 3;
 // Constants for stored data spreadsheet
 const DATASTORE_DATASHEET_NAME = 'Data';
 const DATASTORE_DEFAULT_MEASUREMENTS_CELL = 'A1';
-const DATASTORE_TEMP_CELL = 'D1';
-const DATASTORE_TEMP_RANGE = 'D1:D';
+const DATASTORE_TEMP_CELL = 'G1';
+const DATASTORE_TEMP_RANGE = 'G1:G';
 const DATASTORE_TEMP_ROW = 1;
-const DATASTORE_TEMP_COL1 = 4;
-const DATASTORE_TEMP_COL2 = 5;
+const DATASTORE_TEMP_COL1 = 7;
+const DATASTORE_TEMP_COL2 = 8;
 const DATASTORE_TEMP_TWO_COLS = 2;
-const DATASTORE_MONTH_KEY_RANGE = 'B1:B';
-const DATASTORE_MONTH_VAL_RANGE = 'C1:C';
-const DATASTORE_MONTH_KEY_COL = 2;
-const DATASTORE_MONTH_VAL_COL = 3;
+const DATASTORE_MONTH_KEY_RANGE = 'E1:E';
+const DATASTORE_MONTH_VAL_RANGE = 'F1:F';
+const DATASTORE_MONTH_KEY_COL = 5;
+const DATASTORE_MONTH_VAL_COL = 6;
+const DATASTORE_BAR_INIT_CELLS = ['B2', 'C2', 'D2'];
+const DATASTORE_BAR_INCOME_COL = 3;
+const DATASTORE_BAR_EXPENSE_COL = 4;
+const DATASTORE_BAR_MONTHS_RANGE = 'B1:B';
+const DATASTORE_BAR_TOTAL_RANGE = 'B:D';
+const DATASTORE_BAR_MONTHS_ARR = ['Jan.', 'Feb.', 'Mar.', 'Apr.', 'May', 'June', 'July', 'Aug.', 'Sept.', 'Oct.', 'Nov.', 'Dec.'];
 
 // Constants for dashboard spreadsheet
 const DASHBOARD_DATASHEET_NAME = 'Dashboard';
@@ -52,7 +58,7 @@ const FORM_MONTH_CATEGORY_EXPENSE_SQL = 'select B,D where MONTH(A) = MONTH(date 
 const TALBE_NUM_ROWS = 9;
 const TABLE_ROWS = [1, 9];
 const TABLE_COLS = [1, 2];
-const TABLE_CELL_HEIGHT = 45;
+const TABLE_CELL_HEIGHT = 35;
 const TABLE_CELL_KEY_WIDTH = 250;
 const TABLE_CELL_VAL_WIDTH = 180;
 const TABLE_STRINGS = new Map([
@@ -83,6 +89,27 @@ const DATASTORE_MONTH_GRAPH_ROW_POS = 1;
 const DATASTORE_MONTH_GRAPH_COL_POS = 4;
 const MONTH_GRAPH_TITLE = 'Current Month Expenses';
 const MONTH_GRAPH_COL_RANGE = [4, 8];
+const BAR_LABEL_INCOME = 'Income';
+const BAR_LABEL_EXPENSE = 'Expense';
+const DATASTORE_BAR_GRAPH_ROW_POS = 11;
+const DATASTORE_BAR_GRAPH_COL_POS = 1;
+
+
+
+
+function init() {
+  // Call functions to initialize various components
+  formatOverviewTable();
+  deleteTriggers();
+  createUpdateTriggers();
+  
+  // Sets initial cell for monthly data info
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var dataSheet = spreadsheet.getSheetByName(DATASTORE_DATASHEET_NAME);
+  dataSheet.getRange(DATASTORE_BAR_INIT_CELLS[0]).setValue(DATASTORE_BAR_MONTHS_ARR[new Date().getMonth()]);
+  dataSheet.getRange(DATASTORE_BAR_INIT_CELLS[1]).setValue(0);
+  dataSheet.getRange(DATASTORE_BAR_INIT_CELLS[2]).setValue(0);
+}
 
 /**
  * Creates the 'Budget Overview' table on the Dashboard 
@@ -238,6 +265,32 @@ function totalQuerySum(target, sql, resultSheet, resultCell, resultFormat) {
   var cell = sheet.getRange(resultCell);
   cell.setNumberFormat(resultFormat);
   cell.setValue(sum);
+}
+
+/**
+ * Displays column chart with monthly expense and income data
+ * @param {String} dataRange The cell range of data
+ * @param {Integer} rowPos The row of the top-left corner of the chart (Google Sheets uses 1-based indexing)
+ * @param {Integer} colPos The column of the top-left corner of the chart (Google Sheets uses 1-based indexing)
+ */
+function displayBarChart(dataRange, rowPos, colPos) {
+  // Gets the data sheet to pull data
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = spreadsheet.getSheetByName(DATASTORE_DATASHEET_NAME);
+  var dashboard = spreadsheet.getSheetByName(DASHBOARD_DATASHEET_NAME);
+  var data = sheet.getRange(dataRange);
+
+  // Sets the parameters of the chart
+  var chartBuilder = sheet.newChart()
+  .setChartType(Charts.ChartType.COLUMN)
+  .addRange(data)
+  .setOption('colors', [POSITIVE_AMOUNT_COLOR, NEGATIVE_AMOUNT_COLOR])
+  .setPosition(rowPos, colPos, 1, 1)
+  .setOption('legend.position', 'right')
+  .setOption('series', {0:{labelInLegend:BAR_LABEL_INCOME}, 1:{labelInLegend:BAR_LABEL_EXPENSE}})
+
+  var chart = chartBuilder.build();
+  dashboard.insertChart(chart);  
 }
 
 /**
@@ -437,4 +490,23 @@ function updateDashboard() {
   // Plots the monthly expenses as a pie chart
   setPieChartData(FORM_QUERY_TARGET, FORM_MONTH_CATEGORY_EXPENSE_SQL, DATASTORE_MONTH_KEY_COL, DATASTORE_MONTH_VAL_COL);
   displayPieChart(DATASTORE_MONTH_KEY_RANGE, DATASTORE_MONTH_VAL_RANGE, DATASTORE_MONTH_GRAPH_ROW_POS, DATASTORE_MONTH_GRAPH_COL_POS, MONTH_GRAPH_TITLE);
+  
+  // Updates data for bar graph
+  var dataSheet = spreadsheet.getSheetByName(DATASTORE_DATASHEET_NAME);
+  var currentMonth = DATASTORE_BAR_MONTHS_ARR[new Date().getMonth()];
+  var months = dataSheet.getRange(DATASTORE_BAR_MONTHS_RANGE).getValues();
+  var row = -1;
+  for (var i = 0; i < months.length; i++) {
+    if (months[i][0] == currentMonth) {
+      row = i;
+      break;
+    }
+  }
+  if (row != -1) {
+    dataSheet.getRange(row + 1, DATASTORE_BAR_INCOME_COL).setValue(dashboard.getRange(DASHBOARD_MONTH_INCOME_CELL).getValue());
+    dataSheet.getRange(row + 1, DATASTORE_BAR_EXPENSE_COL).setValue(dashboard.getRange(DASHBOARD_MONTH_EXPENSE_CELL).getValue());
+  }
+  
+  // Plots the income and expenses column chart
+  displayBarChart(DATASTORE_BAR_TOTAL_RANGE, DATASTORE_BAR_GRAPH_ROW_POS, DATASTORE_BAR_GRAPH_COL_POS);
 }
