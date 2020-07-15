@@ -28,6 +28,8 @@ const DATASTORE_BAR_INIT_CELLS = ['B2', 'C2', 'D2'];
 const DATASTORE_BAR_INCOME_COL = 3;
 const DATASTORE_BAR_EXPENSE_COL = 4;
 const DATASTORE_BAR_MONTHS_RANGE = 'B1:B';
+const DATASTORE_BAR_MONTHS_DISPLAY_RANGE = 'B2:B';
+const DATASTORE_BAR_EXCESS_MONTHS = 'B13:B';
 const DATASTORE_BAR_TOTAL_RANGE = 'B:D';
 const DATASTORE_BAR_MONTHS_ARR = ['Jan.', 'Feb.', 'Mar.', 'Apr.', 'May', 'June', 'July', 'Aug.', 'Sept.', 'Oct.', 'Nov.', 'Dec.'];
 
@@ -93,6 +95,7 @@ const BAR_LABEL_INCOME = 'Income';
 const BAR_LABEL_EXPENSE = 'Expense';
 const DATASTORE_BAR_GRAPH_ROW_POS = 11;
 const DATASTORE_BAR_GRAPH_COL_POS = 1;
+const NUM_MONTHS = 12;
 
 
 
@@ -109,6 +112,9 @@ function init() {
   dataSheet.getRange(DATASTORE_BAR_INIT_CELLS[0]).setValue(DATASTORE_BAR_MONTHS_ARR[new Date().getMonth()]);
   dataSheet.getRange(DATASTORE_BAR_INIT_CELLS[1]).setValue(0);
   dataSheet.getRange(DATASTORE_BAR_INIT_CELLS[2]).setValue(0);
+  
+  // Updates the dashboard
+  updateDashboard();
 }
 
 /**
@@ -166,13 +172,16 @@ function createUpdateTriggers() {
   
   // Checks if the Triggers currently exist
   var createFormTrigger = true;
-  var createTimeTrigger = true;
+  var createDateTrigger = true;
+  var createMonthTrigger = true;
   var triggers = ScriptApp.getProjectTriggers();
   triggers.forEach((trigger) => {
     if (trigger.getEventType() === ScriptApp.EventType.ON_FORM_SUBMIT && trigger.getHandlerFunction() === 'updateDashboard') {
       createFormTrigger = false;
     } else if (trigger.getEventType() === ScriptApp.EventType.CLOCK && trigger.getHandlerFunction() === 'updateDashboard') {
-      createTimeTrigger = false;
+      createDateTrigger = false;
+    } else if (trigger.getEventType() === ScriptApp.EventType.CLOCK && trigger.getHandlerFunction() === 'updateMonthData') {
+      createMonthTrigger = false;
     }
   });
 
@@ -184,9 +193,18 @@ function createUpdateTriggers() {
     .create();
   }
 
-  // Creates a Trigger for time
-  if (createTimeTrigger) {
+  // Creates a Trigger for date changes
+  if (createDateTrigger) {
     ScriptApp.newTrigger('updateDashboard')
+    .timeBased()
+    .atHour(0)
+    .nearMinute(30)
+    .everyDays(1)
+    .create();
+  }
+
+  if (createMonthTrigger) {
+    ScriptApp.newTrigger('updateMonthData')
     .timeBased()
     .atHour(0)
     .nearMinute(30)
@@ -203,6 +221,40 @@ function deleteTriggers() {
   var triggers = ScriptApp.getProjectTriggers();
   for(var i = 0; i < triggers.length; i++){
       ScriptApp.deleteTrigger(triggers[i]);
+  }
+}
+
+/**
+ * Updates the month data at the beginning of each month for the column chart
+ */
+function updateMonthData() {
+  // Only runs on the first of the month
+  var date = new Date();
+  if (date.getDate() != 1) {
+    return;
+  }
+  
+  // Gets the necessary data sheet to edit the sheet
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var dataSheet = spreadsheet.getSheetByName(DATASTORE_DATASHEET_NAME);
+  var currentMonth = DATASTORE_BAR_MONTHS_ARR[new Date().getMonth()];
+  var rangeVals = dataSheet.getRange(DATASTORE_BAR_MONTHS_DISPLAY_RANGE).getValues();
+  var numRows = rangeVals.filter(String).length;
+  
+  // Reduces the table if there are already 12 months displayed, and then sets the data
+  if (numRows >= NUM_MONTHS) {
+    for (var i = 3; i <= numRows + 1; i++) {
+      dataSheet.getRange(i-1, 2, 1, 3).setValues(dataSheet.getRange(i, 2, 1, 3).getValues());
+      Logger.log(dataSheet.getRange(i, 2, 1, 3).getValues());
+    }
+    dataSheet.getRange(DATASTORE_BAR_EXCESS_MONTHS).clear();
+    dataSheet.getRange(13, 2).setValue(currentMonth);
+    dataSheet.getRange(13, 3).setValue(0);
+    dataSheet.getRange(13, 4).setValue(0);
+  } else {
+    dataSheet.getRange(numRows + 2, 2).setValue(currentMonth);
+    dataSheet.getRange(numRows + 2, 3).setValue(0);
+    dataSheet.getRange(numRows + 2, 4).setValue(0);
   }
 }
 
