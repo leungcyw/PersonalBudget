@@ -93,6 +93,8 @@ const MONTH_GRAPH_TITLE = 'Current Month Expenses';
 const MONTH_GRAPH_COL_RANGE = [4, 8];
 const BAR_LABEL_INCOME = 'Income';
 const BAR_LABEL_EXPENSE = 'Expense';
+const BAR_GRAPH_ROW_RANGE = [11, 29];
+const BAR_GRAPH_EXTRA_COL_RANGE = [3, 8];
 const DATASTORE_BAR_GRAPH_ROW_POS = 11;
 const DATASTORE_BAR_GRAPH_COL_POS = 1;
 const NUM_MONTHS = 12;
@@ -331,6 +333,10 @@ function displayBarChart(dataRange, rowPos, colPos) {
   var sheet = spreadsheet.getSheetByName(DATASTORE_DATASHEET_NAME);
   var dashboard = spreadsheet.getSheetByName(DASHBOARD_DATASHEET_NAME);
   var data = sheet.getRange(dataRange);
+  
+  // Calculates the dimensions of the graph
+  var width = TABLE_CELL_KEY_WIDTH + TABLE_CELL_VAL_WIDTH + dashboard.getColumnWidth(BAR_GRAPH_EXTRA_COL_RANGE[0]) * (BAR_GRAPH_EXTRA_COL_RANGE[1] - BAR_GRAPH_EXTRA_COL_RANGE[0] + 1);
+  var height = dashboard.getRowHeight(BAR_GRAPH_ROW_RANGE[0]) * (BAR_GRAPH_ROW_RANGE[1] - BAR_GRAPH_ROW_RANGE[0] + 1);
 
   // Sets the parameters of the chart
   var chartBuilder = sheet.newChart()
@@ -340,6 +346,8 @@ function displayBarChart(dataRange, rowPos, colPos) {
   .setPosition(rowPos, colPos, 1, 1)
   .setOption('legend.position', 'right')
   .setOption('series', {0:{labelInLegend:BAR_LABEL_INCOME}, 1:{labelInLegend:BAR_LABEL_EXPENSE}})
+  .setOption('width', width)
+  .setOption('height', height);
 
   var chart = chartBuilder.build();
   dashboard.insertChart(chart);  
