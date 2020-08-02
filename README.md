@@ -7,7 +7,7 @@ Through these functions, the spreadsheet can create visualizable data without an
 
 ## Set Up Instructions
 ### 1. Create Google Form ###
-This set of instructions assume that you have a Google account with access to Google Drive. From the Google Drive page, create a new Google Form through `New -> More -> Google Forms`. The Google Form will have three questions.  
+This set of instructions assume that you have a Google account with access to Google Drive. From the [Google Drive](https://www.google.com/drive/) page, create a new Google Form through `New -> More -> Google Forms`. The Google Form will have three questions.  
   
 Set the first question to be the *Category*, which is a dropdown type. You can add as many options as you need, but one option must be for your incomes, labeled *Income*. The rest of the options you add must be your categories for expenses. Make sure this question is toggled as *Required*.  
 ![Sample Display of Completed Form Question 1](images/Form_Question1.png "Completed Form Question 1")  
@@ -28,7 +28,7 @@ At the bottom of the Google Sheets, you should see the sheet named *Form Respons
 ### 3. Add the Script to Google Sheets ###
 Now, on the Google Sheets, navigate to `Tools -> Script editor`, which should open a Scripts Editor with the *Code.gs* file currently open. You can name the Script whatever you want. Next, delete its contents and replace it with the contents of the *Code.gs* file located in this Github repository. After copying over the contents, save the file with *Ctrl+S*. 
   
-Finally, on top of the Scripts page, navigate to `Run -> Run function -> init`. This will initialize all necessary triggers and visualizations so your data input through Google Forms automatically gets updated on the dashboard. You might have to authorize the script to read and write to your spreadsheet.  
+Finally, on top of the Scripts page, navigate to `Run -> Run function -> init`. This will initialize all necessary triggers and visualizations so your data input through Google Forms automatically gets updated on the dashboard. You might have to authorize the script to read and write to your spreadsheet. To authorize the script through the popup, check the `Advanced` options.  
 
 ### 4. Start Adding to the Google Form ###
 You are now ready to input data through the Google Form! In the Google Form you created, go to `Responses -> Send -> Send via Link`. Save the link displayed, as you can access the form to fill out through the url. And now you're set!
