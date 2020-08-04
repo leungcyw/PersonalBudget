@@ -4,6 +4,11 @@ My personal budgeting tool to keep track of my finances, taking advantage of Goo
 Data is inputted through Google Form, and output is rendered in Google Sheets. 
 The *Code.gs* file is the only necessary program, and consists of Google Apps Script code used in Google Sheets.
 Through these functions, the spreadsheet can create visualizable data without any manual interactions with spreadsheet cells. 
+\
+\
+\
+![Sample Dashboard](images/Dashboard.png "Dashboard Image")  
+
 
 ## Set Up Instructions
 ### 1. Create Google Form ###
