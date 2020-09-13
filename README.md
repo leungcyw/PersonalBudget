@@ -8,6 +8,7 @@ Through these functions, the spreadsheet can create visualizable data without an
 \
 \
 ![Sample Dashboard](images/Dashboard.png "Dashboard Image")  
+*Note that the above image does not reflect my actual ballance. I'm just a poor college student.*
 
 
 ## Set Up Instructions
