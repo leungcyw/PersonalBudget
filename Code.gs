@@ -217,7 +217,7 @@ function createUpdateTriggers() {
 
 /**
  * Deletes all currently active Triggers
- * NOTE: MUST BE MANUALLY CALLED TO DELE
+ * NOTE: MUST BE MANUALLY CALLED TO DELETE
  */
 function deleteTriggers() {
   var triggers = ScriptApp.getProjectTriggers();
