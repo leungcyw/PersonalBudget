@@ -10,6 +10,7 @@ const RAW_DATASHEET_TIMESHEET_COL = 0;
 const RAW_DATASHEET_CATEGORY_COL = 1;
 const RAW_DATASHEET_DESCRIPTION_COL = 2;
 const RAW_DATASHEET_AMOUNT = 3;
+const RAW_DATASHEET_TIMESTAMP = 0;
 
 // Constants for stored data spreadsheet
 const DATASTORE_DATASHEET_NAME = 'Data';
@@ -32,6 +33,12 @@ const DATASTORE_BAR_MONTHS_DISPLAY_RANGE = 'B2:B';
 const DATASTORE_BAR_EXCESS_MONTHS = 'B13:B';
 const DATASTORE_BAR_TOTAL_RANGE = 'B:D';
 const DATASTORE_BAR_MONTHS_ARR = ['Jan.', 'Feb.', 'Mar.', 'Apr.', 'May', 'June', 'July', 'Aug.', 'Sept.', 'Oct.', 'Nov.', 'Dec.'];
+const DATASTORE_LAST_COMPUTED_TIMESTAMP_CELL = 'A2';
+const DATASTORE_LAST_COMPUTED_TOTAL_BALANCE = 'A3';
+const DATASTORE_LAST_COMPUTED_MONTH_INCOME = 'A4';
+const DATASTORE_LAST_COMPUTED_MONTH_EXPENSES = 'A5';
+const DATASTORE_LAST_COMPUTED_YEAR_INCOME = 'A6';
+const DATASTORE_LAST_COMPUTED_YEAR_EXPENSES = 'A7';
 
 // Constants for dashboard spreadsheet
 const DASHBOARD_DATASHEET_NAME = 'Dashboard';
@@ -55,6 +62,9 @@ const FORM_YEAR_EXPENSE_SQL = 'select D where YEAR(A) = YEAR(date \'"&TEXT(TODAY
 const FORM_MONTH_INCOME_SQL = 'select D where MONTH(A) = MONTH(date \'"&TEXT(TODAY(), "yyyy-mm-dd")&"\') and YEAR(A) = YEAR(date \'"&TEXT(TODAY(), "yyyy-mm-dd")&"\') and B = \'Income\'';
 const FORM_YEAR_INCOME_SQL = 'select D where YEAR(A) = YEAR(date \'"&TEXT(TODAY(), "yyyy-mm-dd")&"\') and B = \'Income\'';
 const FORM_MONTH_CATEGORY_EXPENSE_SQL = 'select B,D where MONTH(A) = MONTH(date \'"&TEXT(TODAY(), "yyyy-mm-dd")&"\') and YEAR(A) = YEAR(date \'"&TEXT(TODAY(), "yyyy-mm-dd")&"\') and B != \'Income\'';
+const EXPENSES_QUERY_CONTENT = 'B != \'Income\'';
+const INCOME_QUERY_CONTENT = 'B = \'Income\'';
+const DurationEnum = Object.freeze({"day": 1, "month": 2, "year": 3, "beginning_of_time": 0});
 
 // Budget Overview table constants
 const TALBE_NUM_ROWS = 9;
@@ -247,7 +257,6 @@ function updateMonthData() {
   if (numRows >= NUM_MONTHS) {
     for (var i = 3; i <= numRows + 1; i++) {
       dataSheet.getRange(i-1, 2, 1, 3).setValues(dataSheet.getRange(i, 2, 1, 3).getValues());
-      Logger.log(dataSheet.getRange(i, 2, 1, 3).getValues());
     }
     dataSheet.getRange(DATASTORE_BAR_EXCESS_MONTHS).clear();
     dataSheet.getRange(13, 2).setValue(currentMonth);
@@ -264,24 +273,48 @@ function updateMonthData() {
  * Gets the total balance from all data from the Google Form spreadsheet
  */
 function totalBalance() {
-  // Gets the raw data from the Google Form spreadsheet
+  // Tries to get cached values exist
   var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var datasheet = spreadsheet.getSheetByName(DATASTORE_DATASHEET_NAME);
   var rawDatasheet = spreadsheet.getSheetByName(RAW_DATASHEET_NAME);
-  var data = rawDatasheet.getDataRange().getValues();
+  var storedTimestamp = datasheet.getRange(DATASTORE_LAST_COMPUTED_TIMESTAMP_CELL).getValue();
+  var storedValue = datasheet.getRange(DATASTORE_LAST_COMPUTED_TOTAL_BALANCE).getValue();
   
-  // Calculates the total income and expenses
+  // Defines computation variables
   var totalIncome = 0;
   var totalExpenses = 0;
-  for (var i = 1; i < data.length; i++) {
-    if (data[i][RAW_DATASHEET_CATEGORY_COL] == 'Income') {
-      totalIncome += data[i][RAW_DATASHEET_AMOUNT];
-    } else {
-      totalExpenses += data[i][RAW_DATASHEET_AMOUNT];
+  
+  // Accumulates the cached values if it exists
+  if (typeof storedTimestamp == 'object' && typeof storedValue == 'number') {
+    var sql = 'select D where A >= datetime \'"&TEXT($A2, "yyyy-mm-dd HH:mm:ss")&"\' and ';
+    var queryIncomeData = query(FORM_QUERY_TARGET, sql + INCOME_QUERY_CONTENT);
+    for (var i = 1; i < queryIncomeData.length; i++) {
+      totalIncome += queryIncomeData[i];
     }
+    var queryExpensesData = query(FORM_QUERY_TARGET, sql + EXPENSES_QUERY_CONTENT);
+    for (var i = 1; i < queryExpensesData.length; i++) {
+      totalExpenses += queryExpensesData[i]; 
+    }
+    
+  // Cached values are invalid, so we iterate through all data entries
+  } else {
+    storedValue = 0;
+    
+    // Gets the raw data from the Google Form spreadsheet
+    var data = rawDatasheet.getDataRange().getValues();
+  
+    // Calculates the total income and expenses
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][RAW_DATASHEET_CATEGORY_COL] == 'Income') {
+        totalIncome += data[i][RAW_DATASHEET_AMOUNT];
+      } else {
+        totalExpenses += data[i][RAW_DATASHEET_AMOUNT];
+      }
+    }        
   }
   
   // Sets the result on the dashboard
-  var totalBalance = totalIncome - totalExpenses;
+  var totalBalance = totalIncome - totalExpenses + storedValue;
   var dashboard = spreadsheet.getSheetByName(DASHBOARD_DATASHEET_NAME);
   var cell = dashboard.getRange(DASHBOARD_TOTAL_BALANCE_CELL);
   cell.setNumberFormat(CURRENCY_FORMAT);
@@ -293,6 +326,11 @@ function totalBalance() {
   } else {
     cell.setFontColor(NEGATIVE_AMOUNT_COLOR);
   }
+ 
+  // Caches the timestamp of the last entry and current total
+  var lastComputedTimestamp = rawDatasheet.getRange(rawDatasheet.getLastRow(), RAW_DATASHEET_TIMESTAMP + 1).getValue();
+  datasheet.getRange(DATASTORE_LAST_COMPUTED_TIMESTAMP_CELL).setValue(new Date(lastComputedTimestamp.getTime() + 1000));
+  datasheet.getRange(DATASTORE_LAST_COMPUTED_TOTAL_BALANCE).setValue(totalBalance);
 }
 
 /**
@@ -302,15 +340,17 @@ function totalBalance() {
  * @param {String} resultSheet The sheet to display the result in
  * @param {String} resultCell The cell on the sheet to display the result in
  * @param {String} resultFormat The format to display the result
+ * @param {String} cacheCell The cell on the data sheet to cache the current result
+ * @param {Number} cachedValue The value of previously cached data
  */
-function totalQuerySum(target, sql, resultSheet, resultCell, resultFormat) {
+function totalQuerySum(target, sql, resultSheet, resultCell, resultFormat, cacheCell, cachedValue) {
   // Gets the sheet to display the result
   var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = spreadsheet.getSheetByName(resultSheet);
   
   // Queries the data and sums the query output
   var queryData = query(target, sql);
-  var sum = 0;
+  var sum = cachedValue;
   for (var i = 1; i < queryData.length; i++) {
     sum += queryData[i][0];
   }
@@ -319,6 +359,61 @@ function totalQuerySum(target, sql, resultSheet, resultCell, resultFormat) {
   var cell = sheet.getRange(resultCell);
   cell.setNumberFormat(resultFormat);
   cell.setValue(sum);
+  
+  // Sets the query sum to the cacheCell
+  if (cacheCell != null) {
+    var datasheet = spreadsheet.getSheetByName(DATASTORE_DATASHEET_NAME);
+    datasheet.getRange(cacheCell).setValue(sum);
+  }
+}
+
+/**
+ * Checks if a cached value could be used to reduce query amount before computing the sum
+ * @param {String} target The target of the query
+ * @param {String} sql The query parameters to search for
+ * @param {String} duration The time duration the query is for
+ * @param {String} resultSheet The sheet to display the result in
+ * @param {String} resultCell The cell on the sheet to display the result in
+ * @param {String} resultFormat The format to display the result
+ * @param {String} cacheCell The cell on the data sheet to cache the current result
+ */
+function cachedTotalQuerySum(target, sql, duration, resultSheet, resultCell, resultFormat, cacheCell) {
+  // Gets the cached values in the data sheet
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var datasheet = spreadsheet.getSheetByName(DATASTORE_DATASHEET_NAME);
+  var storedTimestamp = datasheet.getRange(DATASTORE_LAST_COMPUTED_TIMESTAMP_CELL).getValue();
+  var storedValue = (cacheCell == null) ? null : datasheet.getRange(cacheCell).getValue();
+    
+  // Checks if the cached value is valid for the given duration
+  var validCache = false;
+  if (typeof storedTimestamp == 'object' && typeof storedValue == 'number') {
+    var today = new Date();
+    switch (duration) {
+      case 1:
+        validCache = false;
+        break;
+      case 2:
+        validCache = (storedTimestamp.getMonth() == today.getMonth() && storedTimestamp.getFullYear() == today.getFullYear());
+        break;
+      case 3:
+        validCache = (storedTimestamp.getFullYear() == today.getFullYear());
+        break;
+      default:
+        validCache = true;
+    }
+  }  
+  
+  // Runs an updated query sum on valid caches
+  if (validCache) {
+    var isIncomeQuery = sql.includes(INCOME_QUERY_CONTENT);
+    var updated_sql = 'select D where A >= datetime \'"&TEXT($A2, "yyyy-mm-dd HH:mm:ss")&"\' and ';
+    updated_sql += (isIncomeQuery) ? INCOME_QUERY_CONTENT : EXPENSES_QUERY_CONTENT;
+    totalQuerySum(target, updated_sql, resultSheet, resultCell, resultFormat, cacheCell, storedValue);
+    return;
+  }
+  
+  // Uses original query sum on invalid caches
+  totalQuerySum(target, sql, resultSheet, resultCell, resultFormat, cacheCell, 0);
 }
 
 /**
@@ -408,10 +503,9 @@ function setPieChartData(target, sql, keyCol, valCol) {
   var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   var dataSheet = spreadsheet.getSheetByName(DATASTORE_DATASHEET_NAME);
   
-  // Deletes currently stored data
-  dataSheet.deleteColumn(valCol);
-  dataSheet.deleteColumn(keyCol);
-
+  // Clears currently stored data
+  dataSheet.getRange(1, valCol, dataSheet.getLastRow()).clear();
+  dataSheet.getRange(1, keyCol, dataSheet.getLastRow()).clear();
   
   // Queries data and stores in it in columns dedicated to temporary storage
   var query = '=QUERY(' + target + ', \"' + sql + '\")';
@@ -421,28 +515,28 @@ function setPieChartData(target, sql, keyCol, valCol) {
   var pullResult = dataSheet.getRange(DATASTORE_TEMP_ROW, DATASTORE_TEMP_COL1, numRows, DATASTORE_TEMP_TWO_COLS).getValues();
 
   // Adds queried data to a map to aggregate data of each category
-  var expenses = new Map();
+  var expenses = {};
   for (var i = 1; i < pullResult.length; i++) {
     var key = pullResult[i][0];
     var val = pullResult[i][1];
-    if (expenses.has(key)) {
-      expenses.set(key, expenses.get(key) + val);
+    if (expenses.hasOwnProperty(key)) {
+      expenses[key] = expenses[key] + val;
     } else {
-      expenses.set(key, val);
+      expenses[key] = val;
     }
   }
   
   // Sets aggregate data to the the specified keyCol and valCol, starting on the second row
-  var row = 2;
-  expenses.forEach((val, key, map) => {
+  var row = 2;  
+  for (const [key, val] of Object.entries(expenses)) {
     dataSheet.getRange(row, keyCol).setValue(key);
     dataSheet.getRange(row, valCol).setValue(val);
-    row += 1;
-  });
+    row += 1;    
+  }
   
-  // Deletes temporary data 
-  dataSheet.deleteColumn(DATASTORE_TEMP_COL1);
-  dataSheet.deleteColumn(DATASTORE_TEMP_COL2);
+  // Clears temporary data 
+  dataSheet.getRange(1, DATASTORE_TEMP_COL1, dataSheet.getLastRow()).clear();
+  dataSheet.getRange(1, DATASTORE_TEMP_COL2, dataSheet.getLastRow()).clear();
 }
 
 /**
@@ -468,7 +562,7 @@ function query(target, sql) {
   var pullResult = dataSheet.getRange(DATASTORE_TEMP_ROW, DATASTORE_TEMP_COL1, numRows).getValues();
   
   // Deletes the column returns the queried data
-  dataSheet.deleteColumn(DATASTORE_TEMP_COL1);
+  dataSheet.getRange(1, DATASTORE_TEMP_COL1, dataSheet.getLastRow()).clear();
   return pullResult;
 }
 
@@ -514,12 +608,20 @@ function updateDashboard() {
   clearFigures(DASHBOARD_DATASHEET_NAME);
   
   // Queries data from Google Form responses and sets the data
-  totalQuerySum(FORM_QUERY_TARGET, FORM_DATE_EXPENSE_SQL, DASHBOARD_DATASHEET_NAME, DASHBOARD_DATE_EXPENSE_CELL, CURRENCY_FORMAT);
-  totalQuerySum(FORM_QUERY_TARGET, FORM_MONTH_EXPENSE_SQL, DASHBOARD_DATASHEET_NAME, DASHBOARD_MONTH_EXPENSE_CELL, CURRENCY_FORMAT);
-  totalQuerySum(FORM_QUERY_TARGET, FORM_YEAR_EXPENSE_SQL, DASHBOARD_DATASHEET_NAME, DASHBOARD_YEAR_EXPENSE_CELL, CURRENCY_FORMAT);
-  totalQuerySum(FORM_QUERY_TARGET, FORM_MONTH_INCOME_SQL, DASHBOARD_DATASHEET_NAME, DASHBOARD_MONTH_INCOME_CELL, CURRENCY_FORMAT);
-  totalQuerySum(FORM_QUERY_TARGET, FORM_YEAR_INCOME_SQL, DASHBOARD_DATASHEET_NAME, DASHBOARD_YEAR_INCOME_CELL, CURRENCY_FORMAT);
+  //totalQuerySum(FORM_QUERY_TARGET, FORM_DATE_EXPENSE_SQL, DASHBOARD_DATASHEET_NAME, DASHBOARD_DATE_EXPENSE_CELL, CURRENCY_FORMAT, null, 0);
+  //totalQuerySum(FORM_QUERY_TARGET, FORM_MONTH_EXPENSE_SQL, DASHBOARD_DATASHEET_NAME, DASHBOARD_MONTH_EXPENSE_CELL, CURRENCY_FORMAT, DATASTORE_LAST_COMPUTED_MONTH_EXPENSES, 0);
+  //totalQuerySum(FORM_QUERY_TARGET, FORM_YEAR_EXPENSE_SQL, DASHBOARD_DATASHEET_NAME, DASHBOARD_YEAR_EXPENSE_CELL, CURRENCY_FORMAT, DATASTORE_LAST_COMPUTED_YEAR_EXPENSES, 0);
+  //totalQuerySum(FORM_QUERY_TARGET, FORM_MONTH_INCOME_SQL, DASHBOARD_DATASHEET_NAME, DASHBOARD_MONTH_INCOME_CELL, CURRENCY_FORMAT, DATASTORE_LAST_COMPUTED_MONTH_INCOME, 0);
+  //totalQuerySum(FORM_QUERY_TARGET, FORM_YEAR_INCOME_SQL, DASHBOARD_DATASHEET_NAME, DASHBOARD_YEAR_INCOME_CELL, CURRENCY_FORMAT, DATASTORE_LAST_COMPUTED_YEAR_INCOME, 0);
+  
+  cachedTotalQuerySum(FORM_QUERY_TARGET, FORM_DATE_EXPENSE_SQL, DurationEnum.day, DASHBOARD_DATASHEET_NAME, DASHBOARD_DATE_EXPENSE_CELL, CURRENCY_FORMAT, null);
+  cachedTotalQuerySum(FORM_QUERY_TARGET, FORM_MONTH_EXPENSE_SQL, DurationEnum.month, DASHBOARD_DATASHEET_NAME, DASHBOARD_MONTH_EXPENSE_CELL, CURRENCY_FORMAT, DATASTORE_LAST_COMPUTED_MONTH_EXPENSES);
+  cachedTotalQuerySum(FORM_QUERY_TARGET, FORM_YEAR_EXPENSE_SQL, DurationEnum.year, DASHBOARD_DATASHEET_NAME, DASHBOARD_YEAR_EXPENSE_CELL, CURRENCY_FORMAT, DATASTORE_LAST_COMPUTED_YEAR_EXPENSES);
+  cachedTotalQuerySum(FORM_QUERY_TARGET, FORM_MONTH_INCOME_SQL, DurationEnum.month, DASHBOARD_DATASHEET_NAME, DASHBOARD_MONTH_INCOME_CELL, CURRENCY_FORMAT, DATASTORE_LAST_COMPUTED_MONTH_INCOME);
+  cachedTotalQuerySum(FORM_QUERY_TARGET, FORM_YEAR_INCOME_SQL, DurationEnum.year, DASHBOARD_DATASHEET_NAME, DASHBOARD_YEAR_INCOME_CELL, CURRENCY_FORMAT, DATASTORE_LAST_COMPUTED_YEAR_INCOME);
   totalBalance();
+  
+
 
   // Computes and sets the total monthly balance
   var monthBalanceCell = dashboard.getRange(DASHBOARD_MONTH_BALANCE_CELL);
@@ -547,10 +649,6 @@ function updateDashboard() {
     yearBalanceCell.setFontColor(NEGATIVE_AMOUNT_COLOR);
   }
   
-  // Plots the monthly expenses as a pie chart
-  setPieChartData(FORM_QUERY_TARGET, FORM_MONTH_CATEGORY_EXPENSE_SQL, DATASTORE_MONTH_KEY_COL, DATASTORE_MONTH_VAL_COL);
-  displayPieChart(DATASTORE_MONTH_KEY_RANGE, DATASTORE_MONTH_VAL_RANGE, DATASTORE_MONTH_GRAPH_ROW_POS, DATASTORE_MONTH_GRAPH_COL_POS, MONTH_GRAPH_TITLE);
-  
   // Updates data for bar graph
   var dataSheet = spreadsheet.getSheetByName(DATASTORE_DATASHEET_NAME);
   var currentMonth = DATASTORE_BAR_MONTHS_ARR[new Date().getMonth()];
@@ -569,4 +667,9 @@ function updateDashboard() {
   
   // Plots the income and expenses column chart
   displayBarChart(DATASTORE_BAR_TOTAL_RANGE, DATASTORE_BAR_GRAPH_ROW_POS, DATASTORE_BAR_GRAPH_COL_POS);
+  
+  
+  // Plots the monthly expenses as a pie chart
+  setPieChartData(FORM_QUERY_TARGET, FORM_MONTH_CATEGORY_EXPENSE_SQL, DATASTORE_MONTH_KEY_COL, DATASTORE_MONTH_VAL_COL);
+  displayPieChart(DATASTORE_MONTH_KEY_RANGE, DATASTORE_MONTH_VAL_RANGE, DATASTORE_MONTH_GRAPH_ROW_POS, DATASTORE_MONTH_GRAPH_COL_POS, MONTH_GRAPH_TITLE);
 }
