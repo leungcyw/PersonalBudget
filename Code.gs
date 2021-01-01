@@ -327,10 +327,13 @@ function totalBalance() {
     cell.setFontColor(NEGATIVE_AMOUNT_COLOR);
   }
  
-  // Caches the timestamp of the last entry and current total
-  var lastComputedTimestamp = rawDatasheet.getRange(rawDatasheet.getLastRow(), RAW_DATASHEET_TIMESTAMP + 1).getValue();
-  datasheet.getRange(DATASTORE_LAST_COMPUTED_TIMESTAMP_CELL).setValue(new Date(lastComputedTimestamp.getTime() + 1000));
-  datasheet.getRange(DATASTORE_LAST_COMPUTED_TOTAL_BALANCE).setValue(totalBalance);
+  // Tries to cache the timestamp of the last entry and current total
+  // Errors when totalBalance is called when there are no data entries (e.g. when called on init)
+  try {
+    var lastComputedTimestamp = rawDatasheet.getRange(rawDatasheet.getLastRow(), RAW_DATASHEET_TIMESTAMP + 1).getValue();
+    datasheet.getRange(DATASTORE_LAST_COMPUTED_TIMESTAMP_CELL).setValue(new Date(lastComputedTimestamp.getTime() + 1000));
+    datasheet.getRange(DATASTORE_LAST_COMPUTED_TOTAL_BALANCE).setValue(totalBalance);
+  } catch (err) {}
 }
 
 /**
