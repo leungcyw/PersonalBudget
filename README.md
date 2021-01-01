@@ -21,7 +21,7 @@ Set the first question to be the *Category*, which is a dropdown type. You can a
 Set the second question to be the *Description*, which is a short answer type. This will just be a description of the input for your personal records, and could be required or not.  
 ![Sample Display of Completed Form Question 2](images/Form_Question2.png "Completed Form Question 2")  
 
-Set the third question for the *Amount*, which is a short answer type. This will be the positive numerical amount of the income or expense, and should be a *Required* question. Also set a response validation for this question to ensure that the input is a number greater than zero.  
+Set the third question for the *Amount*, which is a short answer type. This will be the positive numerical amount of the income or expense, and should be a *Required* question. Also set a response validation for this question to ensure that the input is a number greater than zero. Note that all your inputs will be positive. The tool will add all inputs under the *Income* category to your total balance and subtract all other inputs from your balance.     
 ![Sample Display of Completed Form Question 3](images/Form_Question3.png "Completed Form Question 3")  
 
 ### 2. Connect to Google Sheets ###
@@ -37,4 +37,8 @@ Now, on the Google Sheets, navigate to `Tools -> Script editor`, which should op
 Finally, on top of the Scripts page, navigate to `Run -> Run function -> init`. This will initialize all necessary triggers and visualizations so your data input through Google Forms automatically gets updated on the dashboard. You might have to authorize the script to read and write to your spreadsheet. To authorize the script through the popup, check the `Advanced` options.  
 
 ### 4. Start Adding to the Google Form ###
-You are now ready to input data through the Google Form! In the Google Form you created, go to `Responses -> Send -> Send via Link`. Save the link displayed, as you can access the form to fill out through the url. And now you're set!
+You are now ready to input data through the Google Form! In the Google Form you created, go to `Responses -> Send -> Send via Link`. Save the link displayed, as you can access the form to fill out through the url.  
+
+### Notes ###
+- To update the dashboard manually, starting from the Google Sheets, navigate to `Tools -> Script editor`, which should open the *Code.gs* file. From the Scripts page, navigate to `Run -> Run function -> updateDashboard`. 
+- There may be unforseen errors with the data caching optimization. To compute on all data entries inputted through the Google Form, from the Google Sheets, go to the *Data* sheet. From there, delete the contents of the cell 'A2' (which should be some timestamp). Then, run the `updateDashboard` function.  
