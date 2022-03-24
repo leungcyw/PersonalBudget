@@ -27,6 +27,10 @@ function displayPieChart(keyRange, valRange, rowPos, colPos, title) {
   // Gets width and height of chart based on the Budget Overview table
   var width = dashboard.getColumnWidth(MONTH_GRAPH_COL_RANGE[0]) * (MONTH_GRAPH_COL_RANGE[1] - MONTH_GRAPH_COL_RANGE[0] + 1);
   var height = dashboard.getRowHeight(1) * TALBE_NUM_ROWS;
+  if (title === YEAR_GRAPH_TITLE) {
+    width = TABLE_CELL_KEY_WIDTH + TABLE_CELL_VAL_WIDTH + dashboard.getColumnWidth(BAR_GRAPH_EXTRA_COL_RANGE[0]) * (BAR_GRAPH_EXTRA_COL_RANGE[1] - BAR_GRAPH_EXTRA_COL_RANGE[0] + 1);
+    height = dashboard.getRowHeight(BAR_GRAPH_ROW_RANGE[0]) * (BAR_GRAPH_ROW_RANGE[1] - BAR_GRAPH_ROW_RANGE[0] + 1);
+  }
 
   // Sets parameters for the pie chart
   var totalsChart = dataSheet.newChart()

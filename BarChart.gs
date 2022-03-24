@@ -8,6 +8,7 @@
  * @param {String} dataRange The cell range of data
  * @param {Integer} rowPos The row of the top-left corner of the chart (Google Sheets uses 1-based indexing)
  * @param {Integer} colPos The column of the top-left corner of the chart (Google Sheets uses 1-based indexing)
+ * @param {String} title The title of the plot
  */
 function displayBarChart(dataRange, rowPos, colPos, title) {
   // Gets the data sheet to pull data
