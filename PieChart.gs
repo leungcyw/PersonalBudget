@@ -39,7 +39,6 @@ function displayPieChart(keyRange, valRange, rowPos, colPos, title) {
   .addRange(totalChartValues)
   .setPosition(rowPos, colPos, 0, 0)
   .setOption('legend.position', 'right')
-  .setOption('pieSliceText', 'value-and-percentage')
   .setOption('title', title)
   .setOption('width', width)
   .setOption('height', height)
